@@ -4,7 +4,8 @@ from random import choices, randint
 from typing import List
 
 from bson import ObjectId
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import ValidationError
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
@@ -99,7 +100,6 @@ def update_prompt(prompt_id: str, request: UpdateRequestArgs):
     if request.updatedBy is None:
         raise HTTPException(status_code=403, detail="User missing from request")
 
-
     # Check each field in the request and add it to the update_dict if it's not None
     if request.prompt is not None:
         update_dict['prompt'] = request.prompt
@@ -136,20 +136,31 @@ def delete_prompt(prompt_id: str):
 
 
 @app.post("/create-seed-data")
-def create_seed_data():
-    prompts = []
-    for _ in range(10):
-        prompt = Prompt(
-            _id=str(ObjectId()),  # Generate a dummy ID for the seed data
-            prompt=f"Prompt {randint(1, 100)}",
-            promptTitle=f"Sample Prompt {randint(1, 100)}",
-            promptDescription=f"This is a sample prompt description {randint(1, 100)}",
-            createdBy=choices(["John Doe", "Jane Smith", "Emily Johnson", "Michael Davis"], k=1)[0],
-            createdDateTime=datetime.now(),
-            lastUpdatedBy=choices(["John Doe", "Jane Smith", "Emily Johnson", "Michael Davis"], k=1)[0],
-            lastUpdatedDateTime=datetime.now()
-        )
-        prompts.append(prompt)
+def create_seed_data(num_records: int = Query(10, ge=1, le=100)):
+    """
+    Creates seed data for prompts in the database.
 
-    result = collection.insert_many([p.dict(by_alias=True) for p in prompts])
-    return {"message": f"{len(result.inserted_ids)} prompts created successfully"}
+    Parameters:
+    - num_records (int): The number of prompt records to create (default is 10, must be between 1 and 100).
+    """
+    try:
+        prompts = []
+        for _ in range(num_records):
+            prompt = Prompt(
+                id=str(ObjectId()),  # Use 'id' instead of '_id'
+                prompt=f"Prompt {randint(1, 100)}",
+                promptTitle=f"Sample Prompt {randint(1, 100)}",
+                promptDescription=f"This is a sample prompt description {randint(1, 100)}",
+                createdBy=choices(["John Doe", "Jane Smith", "Emily Johnson", "Michael Davis"], k=1)[0],
+                createdDateTime=datetime.now(),
+                lastUpdatedBy=choices(["John Doe", "Jane Smith", "Emily Johnson", "Michael Davis"], k=1)[0],
+                lastUpdatedDateTime=datetime.now()
+            )
+            prompts.append(prompt)
+
+        result = collection.insert_many([p.dict(by_alias=True) for p in prompts])
+        return {"message": f"{len(result.inserted_ids)} prompts created successfully"}
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="An error occurred while creating seed data")
