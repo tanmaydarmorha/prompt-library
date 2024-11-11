@@ -34,17 +34,22 @@ collection = db['prompts']
 
 
 @app.get("/prompts", response_model=List[Prompt])
-def get_prompts():
+def get_prompts(page: int = Query(1, gt=0), limit: int = Query(10, gt=0)):
+    """
+    Retrieve a paginated list of prompts from MongoDB.
+    """
     try:
-        # Retrieve the documents from MongoDB
-        prompts = list(collection.find())
+        # Calculate the number of documents to skip
+        skip = (page - 1) * limit
 
-        # Create a local variable to store the converted Prompt instances
+        # Retrieve the documents from MongoDB with pagination
+        prompts = list(collection.find().skip(skip).limit(limit))
+
+        # Create a list to store the converted Prompt instances
         prompt_list = []
 
         # Iterate over each prompt document and create Prompt instances
         for prompt in prompts:
-            print(prompt["_id"])
             prompt_instance = Prompt(
                 id=str(prompt["_id"]),  # Convert ObjectId to string
                 prompt=prompt["prompt"],
@@ -55,11 +60,9 @@ def get_prompts():
                 lastUpdatedBy=prompt["lastUpdatedBy"],
                 lastUpdatedDateTime=prompt["lastUpdatedDateTime"]
             )
-            print(prompt_instance)
-            # Append the created Prompt instance to the list
             prompt_list.append(prompt_instance)
 
-        # Return the local variable
+        # Return the paginated results
         return prompt_list
     except PyMongoError as e:
         raise HTTPException(status_code=500, detail="Database error")
